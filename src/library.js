@@ -1,11 +1,6 @@
 var fs = require('fs');
 var Papa = require('papaparse');
 
-function wpParseFloat(x){
-  return parseFloat(x);
-};
-
-
 var writeDistTable = function(erp, header, filename) {
  var supp = erp.support();
  var csvFile = fs.openSync(filename, 'w');
@@ -31,42 +26,46 @@ function writeCSV(jsonCSV, filename){
 };
 
 // for more manual file writing control
-var openFile = function(filename) {
- var csvFile = fs.openSync(filename, 'w');
- return csvFile
+// config may include 'a' or 'w' flag
+var openFile = function(filename, defaultConfig) {
+  var config = _.isObject(defaultConfig) ? defaultConfig : {'flag' : 'w'};
+  var csvFile = fs.openSync(filename, config.flag);
+  return csvFile;
 };
 
 var writeLine = function(line, handle){
   fs.writeSync(handle, line+'\n');
 };
 
-var writeMarginals = function(erp, filename) {
-  var handle = openFile(filename);
+// filename may either be a string (in which case we automatically open new file) or a handle
+// may pass an array of meta-data to be appended to each line
+var writeMarginals = function(erp, filename, data) {
+  var handle = _.isString(filename) ? openFile(filename) : filename;
   var supp = erp.support();
-  supp.forEach(
-    function(s) {
-      supportWriter(s, Math.exp(erp.score(s)), handle);
-    }
-  )
+  supp.forEach(function(s) {
+    var d = _.isEmpty(data) ? s : data.concat(s);
+    supportWriter(d, Math.exp(erp.score(s)), handle);
+  });
   closeFile(handle);
 };
 
 var writeJoint = function(erp, filename) {
   var handle = openFile(filename);
   var supp = erp.support();
-   _.isObject(supp[0]) ?
-   writeLine([_.keys(supp[0]),"prob"].join(','),
- handle) :
-   null
 
-   supp.forEach(function(s) {
-     writeLine([
-       _.values(s),
-       Math.exp(erp.score(s))
-     ].join(','), handle
-     );
-   })
-   closeFile(handle);
+  // Write header
+  if(_.isObject(supp[0])) {
+    writeLine([_.keys(supp[0]),"prob"].join(','), handle);
+  }
+
+  // Write values
+  supp.forEach(function(s) {
+    writeLine([
+      _.values(s), 
+      Math.exp(erp.score(s))
+    ].join(','), handle);
+  })
+  closeFile(handle);
 };
 
 var closeFile = function(handle){
@@ -81,6 +80,5 @@ module.exports = {
   openFile: openFile,
   closeFile: closeFile,
   writeLine: writeLine,
-  writeDistTable: writeDistTable,
-  wpParseFloat: wpParseFloat
+  writeDistTable: writeDistTable
 };
